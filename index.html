@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gifsbar</title>
-<meta name="description" content="Gifsbar: paste a Twitter/X GIF link and turn it into a WhatsApp sticker or GIF.">
+<meta name="description" content="Gifsbar: paste a Twitter/X GIF link and turn it into a GIF for WhatsApp.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='44' fill='%23E9B949'/%3E%3Ccircle cx='36' cy='42' r='6' fill='%232B2622'/%3E%3Ccircle cx='64' cy='42' r='6' fill='%232B2622'/%3E%3Cpath d='M30 62q20 20 40 0' stroke='%232B2622' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -50,14 +50,6 @@
   :focus-visible{outline:3px solid var(--green);outline-offset:2px}
   #url:focus{outline:3px solid var(--green);outline-offset:0;border-color:transparent}
 
-  /* sticker / gif toggle */
-  .modes{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:14px;padding:4px;border-radius:16px;background:var(--tray)}
-  .modes label{cursor:pointer;position:relative}
-  .modes input{position:absolute;opacity:0;pointer-events:none}
-  .modes span{display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:12px;font-weight:700;color:var(--mute);
-    transition:background-color .2s,color .2s}
-  .modes input:checked+span{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(80,55,20,.18)}
-  .modes input:focus-visible+span{outline:3px solid var(--green);outline-offset:2px}
 
   /* status */
   #status{margin:12px 0 0;min-height:1.5em;color:var(--mute);font-size:.92rem}
@@ -68,12 +60,10 @@
   .preview-wrap{display:inline-grid;place-items:center;width:220px;height:220px;border-radius:20px;overflow:hidden;
     background:repeating-conic-gradient(#EFE7D6 0 25%,#F7F1E3 0 50%) 0 0/18px 18px;border:1px solid var(--line)}
   .preview-wrap img,.preview-wrap video{max-width:100%;max-height:100%;object-fit:contain}
-  #vpreview[hidden],#preview[hidden]{display:none}
   #size{color:var(--mute);font-size:.82rem;margin-top:10px}
-  #stickerNote{margin:12px 0 0;padding:12px 14px;border-radius:14px;background:var(--green-soft);color:#24402F;font-size:.9rem}
-  #stickerNote[hidden]{display:none}
+  #steps{margin:16px 0 0;padding:14px 14px 14px 34px;border-radius:14px;background:var(--green-soft);color:#24402F;font-size:.9rem;text-align:left}
+  #steps li{margin:2px 0}
   .help{margin:8px 0 0;color:var(--mute);font-size:.82rem}
-  #stickerNote code{background:rgba(255,255,255,.7);padding:1px 6px;border-radius:6px}
   #result .row{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap}
   #result .row button{flex:1 1 150px}
 
@@ -144,7 +134,7 @@
     <div class="brand">Gifsbar</div>
     <span class="pill">Free · runs in your browser</span>
     <h1>Turn any tweet GIF into a <mark>WhatsApp sticker</mark></h1>
-    <p>Paste a Twitter / X link. Get a sticker or GIF ready to send.</p>
+    <p>Paste a Twitter / X link. Get a GIF, then make it a sticker.</p>
   </header>
 
   <main>
@@ -154,28 +144,27 @@
       <button id="go">Convert</button>
     </form>
     <p class="help" id="help">Works with the link from a tweet's <b>Copy link</b> (x.com or twitter.com), or paste the whole tweet text if it contains the link. Short <code>t.co</code> links aren't supported.</p>
-    <div class="modes" role="radiogroup" aria-label="Output format">
-      <label><input type="radio" name="mode" value="gif" checked><span>GIF</span></label>
-      <label><input type="radio" name="mode" value="sticker"><span>Sticker</span></label>
-    </div>
-    <p id="stickerNote" hidden><b>How to send it:</b> convert, download the file, then in WhatsApp click <b>Attach (+) → Sticker</b> and pick <code>sticker.webp</code>. On WhatsApp Desktop it arrives as an animated GIF, not a sticker. Sharing the file directly sends it as a document.</p>
     <div id="status" role="status" aria-live="polite"></div>
 
     <div id="result">
       <div class="preview-wrap">
-        <img id="preview" alt="Sticker preview">
-        
+        <img id="preview" alt="GIF preview">
       </div>
       <div id="size"></div>
       <div class="row">
         <button id="share">Send to WhatsApp</button>
         <button id="dl" class="ghost">Download .gif</button>
       </div>
+      <ol id="steps">
+        <li><b>Send to WhatsApp.</b> It goes as a GIF.</li>
+        <li><b>Download</b> the GIF.</li>
+        <li>In WhatsApp, click <b>New sticker</b> and pick the GIF from the gallery to make it a sticker.</li>
+      </ol>
     </div>
 
     <details>
       <summary>How does this work?</summary>
-      <p>WhatsApp has no link that sends a sticker or GIF directly, so the page converts the clip in your browser. <b>Sticker</b> is a 512×512 animated WebP (under 500&nbsp;KB, up to 6&nbsp;s) that you add with WhatsApp's Attach → Sticker (on Desktop it arrives as an animated GIF). <b>GIF</b> is a looping GIF file (up to 6&nbsp;s) that WhatsApp plays as a GIF; on phones the button opens the share sheet.</p>
+      <p>WhatsApp has no link that creates a sticker directly, so the page converts the clip in your browser into a looping GIF (up to 6&nbsp;s). Send it to WhatsApp, download it, then use WhatsApp's <b>New sticker</b> to turn the GIF into a sticker. On phones the send button opens the share sheet.</p>
     </details>
   </main>
 </div>
@@ -186,16 +175,8 @@
 <script>
 const $ = id => document.getElementById(id);
 const statusEl = $('status');
-const MAX_BYTES = 500 * 1024;
-let ffmpeg = null, blob = null, objUrl = null, outMode = 'gif';
-
-// Sticker instructions only show while Sticker is selected.
-const syncNote = () => { $('stickerNote').hidden = document.querySelector('input[name=mode]:checked').value !== 'sticker'; };
-document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', syncNote));
-syncNote();
-const fileInfo = () => outMode === 'gif'
-  ? { name: 'clip.gif', type: 'image/gif' }
-  : { name: 'sticker.webp', type: 'image/webp' };
+let ffmpeg = null, blob = null, objUrl = null;
+const FILE = { name: 'clip.gif', type: 'image/gif' };
 
 function say(msg, err = false) { statusEl.textContent = msg; statusEl.className = err ? 'err' : ''; }
 
@@ -246,31 +227,14 @@ async function toGif(f) {
   }
 }
 
-async function convert(videoUrl, mode) {
+async function convert(videoUrl) {
   const f = await loadFFmpeg();
   say('Downloading video…');
   // twimg's CDN returns 403 when a foreign Referer is sent.
   const res = await fetch(videoUrl, { referrerPolicy: 'no-referrer' });
   if (!res.ok) throw new Error('Could not download the video.');
   await f.writeFile('in.mp4', new Uint8Array(await res.arrayBuffer()));
-  if (mode === 'gif') return toGif(f);
-
-  // Try progressively smaller settings until under WhatsApp's 500 KB limit.
-  const tries = [[15, 60], [12, 45], [10, 35], [8, 25], [8, 15]];
-  for (let i = 0; i < tries.length; i++) {
-    const [fps, q] = tries[i];
-    say(`Converting… (attempt ${i + 1}/${tries.length})`);
-    const vf = `fps=${fps},scale=512:512:force_original_aspect_ratio=decrease,` +
-               `pad=512:512:-1:-1:color=0x00000000,format=yuva420p`;
-    await f.exec(['-t', '6', '-i', 'in.mp4', '-vf', vf, '-c:v', 'libwebp',
-                  '-lossless', '0', '-q:v', String(q), '-compression_level', '6',
-                  '-loop', '0', '-an', '-fps_mode', 'passthrough', 'out.webp']);
-    const data = await f.readFile('out.webp');
-    if (data.length <= MAX_BYTES || i === tries.length - 1) {
-      if (data.length > MAX_BYTES) throw new Error('Could not shrink it under 500 KB — try a shorter clip.');
-      return new Blob([data.buffer], { type: 'image/webp' });
-    }
-  }
+  return toGif(f);
 }
 
 $('f').addEventListener('submit', async e => {
@@ -282,19 +246,12 @@ $('f').addEventListener('submit', async e => {
   try {
     say('Finding the video…');
     const vurl = src.direct || await getVideoUrl(src.id);
-    const mode = document.querySelector('input[name=mode]:checked').value;
-    blob = await convert(vurl, mode);
-    outMode = mode;
+    blob = await convert(vurl);
     if (objUrl) URL.revokeObjectURL(objUrl);
     objUrl = URL.createObjectURL(blob);
-    const isGif = mode === 'gif';
     $('preview').src = objUrl;
     const kb = blob.size / 1024;
-    $('size').textContent = `${kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb.toFixed(0) + ' KB'} · ` +
-      (isGif ? 'looping GIF' : '512×512 animated WebP');
-    $('dl').textContent = isGif ? 'Download .gif' : 'Download .webp';
-    // WhatsApp only makes a real sticker via its own Sticker option; a plain share arrives as a file.
-    $('share').textContent = isGif ? 'Send to WhatsApp' : 'Get sticker';
+    $('size').textContent = `${kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb.toFixed(0) + ' KB'} · looping GIF`;
     $('result').style.display = 'block';
     say('Done!');
   } catch (err) {
@@ -307,16 +264,11 @@ $('f').addEventListener('submit', async e => {
 
 $('dl').onclick = () => {
   const a = document.createElement('a');
-  a.href = objUrl; a.download = fileInfo().name; a.click();
+  a.href = objUrl; a.download = FILE.name; a.click();
 };
 
 $('share').onclick = async () => {
-  const { name, type } = fileInfo();
-  if (outMode === 'sticker') { // a share would arrive as a document, so go via WhatsApp's Sticker option
-    say('Downloaded. In WhatsApp: Attach (+) → Sticker → pick sticker.webp (on Desktop it arrives as an animated GIF).');
-    return $('dl').click();
-  }
-  const file = new File([blob], name, { type });
+  const file = new File([blob], FILE.name, { type: FILE.type });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file] }); }
     catch (e) { if (e.name !== 'AbortError') say('Share failed — use Download instead.', true); }
