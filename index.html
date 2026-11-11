@@ -4,73 +4,178 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GIF to WhatsApp Sticker</title>
-<meta name="description" content="Paste a Twitter/X GIF link, get a WhatsApp sticker.">
+<meta name="description" content="Paste a Twitter/X GIF link and turn it into a WhatsApp sticker or GIF.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='44' fill='%23E9B949'/%3E%3Ccircle cx='36' cy='42' r='6' fill='%232B2622'/%3E%3Ccircle cx='64' cy='42' r='6' fill='%232B2622'/%3E%3Cpath d='M30 62q20 20 40 0' stroke='%232B2622' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#0b141a;--card:#111b21;--line:#233138;--fg:#e9edef;--mute:#8696a0;--accent:#25d366;--err:#ff6b6b}
+  :root{
+    --bg:#F7F2E8; --card:#FFFDF8; --ink:#2B2622; --mute:#6B6258; --line:#E6DCC9; --tray:#EFE7D6;
+    --green:#2F6B4F; --green-soft:#E3EDE0; --err:#A8402C; --err-soft:#F6E3DD;
+    --mustard:#E9B949; --terra:#D9694A; --sage:#8DB596; --sky:#8DB7D4; --blush:#EDB9B0;
+    --head:'Fredoka',system-ui,sans-serif; --body:'Nunito',system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
   *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-  main{width:100%;max-width:480px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px}
-  h1{margin:0 0 4px;font-size:1.4rem}
-  p.sub{margin:0 0 20px;color:var(--mute);font-size:.95rem}
-  form{display:flex;gap:8px}
-  input{flex:1;min-width:0;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit}
-  input:focus{outline:2px solid var(--accent);outline-offset:-1px}
-  button{padding:12px 16px;border:0;border-radius:10px;background:var(--accent);color:#06210f;font:inherit;font-weight:600;cursor:pointer}
-  button:disabled{opacity:.5;cursor:default}
-  button.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
-  .modes{display:flex;gap:8px;margin-top:12px}
-  .modes label{flex:1;cursor:pointer}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;min-height:100vh;overflow-x:hidden;color:var(--ink);font:400 1rem/1.55 var(--body);
+    background:var(--bg) radial-gradient(circle at 1px 1px,rgba(43,38,34,.07) 1.2px,transparent 0) 0 0/22px 22px}
+  .page{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:56px 20px}
+  .stage{position:relative;width:100%;max-width:560px}
+
+  /* heading */
+  header{text-align:center;margin-bottom:28px}
+  .pill{display:inline-block;padding:4px 12px;border-radius:999px;background:var(--card);border:1px solid var(--line);
+    color:var(--mute);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+  h1{margin:14px 0 10px;font:700 clamp(2.1rem,7vw,3.3rem)/1.08 var(--head);letter-spacing:-.01em;text-wrap:balance}
+  h1 mark{background:none;color:var(--ink);background-image:linear-gradient(transparent 62%,var(--mustard) 62% 92%,transparent 92%);padding:0 .08em}
+  header p{margin:0 auto;max-width:44ch;text-wrap:balance;color:var(--mute);font-size:1.05rem}
+
+  /* card */
+  main{position:relative;z-index:1;background:var(--card);border:1px solid var(--line);border-radius:24px;padding:24px;
+    box-shadow:0 1px 0 #fff inset,0 18px 40px -22px rgba(80,55,20,.35)}
+  label.field{display:block;margin:0 0 8px;font-weight:700;font-size:.9rem}
+  form{display:flex;gap:10px}
+  input[type=url]{flex:1;min-width:0;min-height:48px;padding:0 16px;border-radius:14px;border:1.5px solid var(--line);
+    background:#fff;color:var(--ink);font:inherit}
+  input[type=url]::placeholder{color:#9A9082}
+  button{min-height:48px;padding:0 20px;border:0;border-radius:14px;background:var(--ink);color:var(--card);
+    font:600 1rem var(--body);cursor:pointer;transition:background-color .2s,transform .15s}
+  button:hover:not(:disabled){background:#463E37}
+  button:active:not(:disabled){transform:scale(.97)}
+  button:disabled{opacity:.55;cursor:progress}
+  button.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+  button.ghost:hover:not(:disabled){background:var(--tray)}
+  :focus-visible{outline:3px solid var(--green);outline-offset:2px}
+  input[type=url]:focus{outline:3px solid var(--green);outline-offset:0;border-color:transparent}
+
+  /* sticker / gif toggle */
+  .modes{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:14px;padding:4px;border-radius:16px;background:var(--tray)}
+  .modes label{cursor:pointer;position:relative}
   .modes input{position:absolute;opacity:0;pointer-events:none}
-  .modes span{display:block;text-align:center;padding:8px;border-radius:10px;border:1px solid var(--line);color:var(--mute)}
-  .modes input:checked+span{border-color:var(--accent);color:var(--fg);background:rgba(37,211,102,.12)}
-  .modes input:focus-visible+span{outline:2px solid var(--accent)}
-  #vpreview{max-width:100%;max-height:240px;border-radius:12px}
+  .modes span{display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:12px;font-weight:700;color:var(--mute);
+    transition:background-color .2s,color .2s}
+  .modes input:checked+span{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(80,55,20,.18)}
+  .modes input:focus-visible+span{outline:3px solid var(--green);outline-offset:2px}
+
+  /* status */
+  #status{margin:12px 0 0;min-height:1.5em;color:var(--mute);font-size:.92rem}
+  #status.err{color:var(--err);background:var(--err-soft);padding:10px 12px;border-radius:12px;font-weight:600}
+
+  /* result */
+  #result{display:none;margin-top:18px;padding-top:20px;border-top:1px dashed var(--line);text-align:center}
+  .preview-wrap{display:inline-grid;place-items:center;width:220px;height:220px;border-radius:20px;overflow:hidden;
+    background:repeating-conic-gradient(#EFE7D6 0 25%,#F7F1E3 0 50%) 0 0/18px 18px;border:1px solid var(--line)}
+  .preview-wrap img,.preview-wrap video{max-width:100%;max-height:100%;object-fit:contain}
   #vpreview[hidden],#preview[hidden]{display:none}
-  #status{margin:16px 0 0;min-height:1.5em;color:var(--mute);font-size:.9rem}
-  #status.err{color:var(--err)}
-  #result{display:none;margin-top:16px;text-align:center}
-  #result img{width:200px;height:200px;object-fit:contain;border-radius:12px;background:
-    repeating-conic-gradient(#1b2830 0 25%,#0f1a20 0 50%) 0 0/16px 16px}
-  #result .row{display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap}
-  #hint{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:rgba(37,211,102,.1);color:var(--fg);font-size:.85rem;text-align:left}
+  #size{color:var(--mute);font-size:.82rem;margin-top:10px}
+  #hint{margin:14px 0 0;padding:12px 14px;border-radius:14px;background:var(--green-soft);color:#24402F;font-size:.9rem;text-align:left}
   #hint[hidden]{display:none}
-  #size{color:var(--mute);font-size:.8rem;margin-top:6px}
-  details{margin-top:20px;color:var(--mute);font-size:.85rem}
-  summary{cursor:pointer}
+  #hint code{background:rgba(255,255,255,.7);padding:1px 6px;border-radius:6px}
+  #result .row{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap}
+  #result .row button{flex:1 1 150px}
+
+  details{margin-top:20px;color:var(--mute);font-size:.88rem}
+  summary{cursor:pointer;font-weight:700;color:var(--ink);min-height:32px}
+  details p{margin:6px 0 0}
+
+  /* decorative stickers */
+  .sticker{position:absolute;z-index:2;width:var(--s,92px);height:var(--s,92px);pointer-events:none;
+    filter:drop-shadow(0 3px 3px rgba(80,55,20,.22));transform:rotate(var(--r,0deg))}
+  .sticker svg{width:100%;height:100%;display:block;overflow:visible}
+  @media (prefers-reduced-motion:no-preference){
+    .sticker{animation:bob 6s ease-in-out infinite;animation-delay:var(--d,0s)}
+    @keyframes bob{50%{transform:rotate(calc(var(--r,0deg) + 4deg)) translateY(-8px)}}
+  }
+  .s1{--s:96px;--r:-14deg;top:-34px;left:-52px}
+  .s2{--s:80px;--r:12deg;top:-22px;right:-44px;--d:-1.5s}
+  .s3{--s:84px;--r:-8deg;top:44%;left:-66px;--d:-3s}
+  .s4{--s:92px;--r:10deg;top:38%;right:-70px;--d:-4s}
+  .s5{--s:84px;--r:12deg;bottom:-34px;left:-30px;--d:-2s}
+  .s6{--s:78px;--r:-12deg;bottom:-28px;right:-26px;--d:-5s}
+
+  @media (max-width:700px){
+    .page{padding:48px 28px}
+    .s1{--s:64px;top:-36px;left:-22px}
+    .s2{--s:56px;top:-28px;right:-18px}
+    .s3,.s4{display:none}
+    .s5{--s:58px;bottom:-36px;left:-14px}
+    .s6{--s:54px;bottom:-30px;right:-12px}
+    main{padding:18px}
+    form{flex-direction:column}
+  }
 </style>
 </head>
 <body>
-<main>
-  <h1>GIF → WhatsApp sticker</h1>
-  <p class="sub">Paste a Twitter / X link that has a GIF or video.</p>
+<div class="page">
+<div class="stage">
 
-  <form id="f">
-    <input id="url" type="url" required placeholder="https://x.com/user/status/123…" autocomplete="off">
-    <button id="go">Convert</button>
-  </form>
-  <div class="modes" role="radiogroup" aria-label="Output format">
-    <label><input type="radio" name="mode" value="sticker" checked><span>Sticker</span></label>
-    <label><input type="radio" name="mode" value="gif"><span>GIF</span></label>
-  </div>
-  <div id="status" role="status"></div>
+  <!-- decorative stickers -->
+  <div class="sticker s1" aria-hidden="true"><svg viewBox="0 0 100 100">
+    <circle cx="50" cy="50" r="42" fill="#E9B949" stroke="#fff" stroke-width="10" paint-order="stroke"/>
+    <circle cx="37" cy="43" r="5.5" fill="#2B2622"/><circle cx="63" cy="43" r="5.5" fill="#2B2622"/>
+    <path d="M31 60q19 19 38 0" fill="none" stroke="#2B2622" stroke-width="5.5" stroke-linecap="round"/>
+    <circle cx="28" cy="58" r="5" fill="#D9694A" opacity=".45"/><circle cx="72" cy="58" r="5" fill="#D9694A" opacity=".45"/></svg></div>
 
-  <div id="result">
-    <img id="preview" alt="Sticker preview">
-    <video id="vpreview" autoplay loop muted playsinline hidden></video>
-    <div id="size"></div>
-    <p id="hint" hidden></p>
-    <div class="row">
-      <button id="share">Send to WhatsApp</button><!-- sticker mode: downloads + shows steps -->
+  <div class="sticker s2" aria-hidden="true"><svg viewBox="0 0 100 100">
+    <path d="M50 86C14 60 10 38 24 26c10-8 22-3 26 8 4-11 16-16 26-8 14 12 10 34-26 60z" fill="#D9694A" stroke="#fff" stroke-width="10" stroke-linejoin="round" paint-order="stroke"/>
+    <path d="M30 34c4-5 10-5 13-1" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".7"/></svg></div>
 
-      <button id="dl" class="ghost">Download .webp</button>
+  <div class="sticker s3" aria-hidden="true"><svg viewBox="0 0 100 100">
+    <path d="M12 22q0-10 10-10h56q10 0 10 10v36q0 10-10 10H48L26 88V68h-4q-10 0-10-10z" fill="#8DB7D4" stroke="#fff" stroke-width="10" stroke-linejoin="round" paint-order="stroke"/>
+    <text x="50" y="52" text-anchor="middle" font-family="Fredoka,sans-serif" font-weight="700" font-size="28" fill="#2B2622">GIF</text></svg></div>
+
+  <div class="sticker s4" aria-hidden="true"><svg viewBox="0 0 100 100">
+    <path d="M50 8l11.6 25.2 27.6 3.2-20.4 18.8 5.6 27.2L50 69.4 25.6 82.4l5.6-27.2L10.8 36.4l27.6-3.2z" fill="#EDB9B0" stroke="#fff" stroke-width="10" stroke-linejoin="round" paint-order="stroke"/>
+    <circle cx="42" cy="48" r="3.5" fill="#2B2622"/><circle cx="58" cy="48" r="3.5" fill="#2B2622"/>
+    <path d="M43 57q7 6 14 0" fill="none" stroke="#2B2622" stroke-width="3.5" stroke-linecap="round"/></svg></div>
+
+  <div class="sticker s5" aria-hidden="true"><svg viewBox="0 0 100 100">
+    <rect x="10" y="16" width="80" height="68" rx="20" fill="#8DB596" stroke="#fff" stroke-width="10" stroke-linejoin="round" paint-order="stroke"/>
+    <path d="M41 36v28l24-14z" fill="#FFFDF8" stroke="#FFFDF8" stroke-width="5" stroke-linejoin="round"/></svg></div>
+
+  <div class="sticker s6" aria-hidden="true"><svg viewBox="0 0 100 100">
+    <path d="M58 6 22 54h24L40 94l40-52H55z" fill="#E9B949" stroke="#fff" stroke-width="10" stroke-linejoin="round" paint-order="stroke"/>
+    <path d="M58 6 22 54h24L40 94l40-52H55z" fill="none" stroke="#D9A02F" stroke-width="2" stroke-linejoin="round" opacity=".6"/></svg></div>
+
+  <header>
+    <span class="pill">Free · runs in your browser</span>
+    <h1>Turn any tweet GIF into a <mark>WhatsApp sticker</mark></h1>
+    <p>Paste a Twitter / X link. Get a sticker or GIF ready to send.</p>
+  </header>
+
+  <main>
+    <label class="field" for="url">Tweet link</label>
+    <form id="f">
+      <input id="url" type="url" required placeholder="https://x.com/user/status/123…" autocomplete="off">
+      <button id="go">Convert</button>
+    </form>
+    <div class="modes" role="radiogroup" aria-label="Output format">
+      <label><input type="radio" name="mode" value="sticker" checked><span>Sticker</span></label>
+      <label><input type="radio" name="mode" value="gif"><span>GIF</span></label>
     </div>
-  </div>
+    <div id="status" role="status" aria-live="polite"></div>
 
-  <details>
-    <summary>How does this work?</summary>
-      <p>WhatsApp has no link that sends a sticker or GIF directly, so the page converts the clip in your browser, then opens your phone's share sheet. <b>Sticker</b> = 512×512 animated WebP (under 500&nbsp;KB, up to 6&nbsp;s). <b>GIF</b> = silent looping MP4 (up to 6&nbsp;s), which WhatsApp plays as a GIF. Pick WhatsApp and a chat. On desktop, download the file and drag it into a WhatsApp chat or use a sticker-pack app.</p>
-  </details>
-</main>
+    <div id="result">
+      <div class="preview-wrap">
+        <img id="preview" alt="Sticker preview">
+        <video id="vpreview" autoplay loop muted playsinline hidden></video>
+      </div>
+      <div id="size"></div>
+      <p id="hint" hidden></p>
+      <div class="row">
+        <button id="share">Send to WhatsApp</button>
+        <button id="dl" class="ghost">Download .webp</button>
+      </div>
+    </div>
+
+    <details>
+      <summary>How does this work?</summary>
+      <p>WhatsApp has no link that sends a sticker or GIF directly, so the page converts the clip in your browser. <b>Sticker</b> is a 512×512 animated WebP (under 500&nbsp;KB, up to 6&nbsp;s) that you add with WhatsApp's Attach → Sticker. <b>GIF</b> is a silent looping MP4 (up to 6&nbsp;s) that WhatsApp plays as a GIF; on phones the button opens the share sheet.</p>
+    </details>
+  </main>
+</div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
