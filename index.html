@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIF to WhatsApp Sticker</title>
+<meta name="description" content="Paste a Twitter/X GIF link, get a WhatsApp sticker.">
+<style>
+  :root{--bg:#0b141a;--card:#111b21;--line:#233138;--fg:#e9edef;--mute:#8696a0;--accent:#25d366;--err:#ff6b6b}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  main{width:100%;max-width:480px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px}
+  h1{margin:0 0 4px;font-size:1.4rem}
+  p.sub{margin:0 0 20px;color:var(--mute);font-size:.95rem}
+  form{display:flex;gap:8px}
+  input{flex:1;min-width:0;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit}
+  input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+  button{padding:12px 16px;border:0;border-radius:10px;background:var(--accent);color:#06210f;font:inherit;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  button.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+  .modes{display:flex;gap:8px;margin-top:12px}
+  .modes label{flex:1;cursor:pointer}
+  .modes input{position:absolute;opacity:0;pointer-events:none}
+  .modes span{display:block;text-align:center;padding:8px;border-radius:10px;border:1px solid var(--line);color:var(--mute)}
+  .modes input:checked+span{border-color:var(--accent);color:var(--fg);background:rgba(37,211,102,.12)}
+  .modes input:focus-visible+span{outline:2px solid var(--accent)}
+  #vpreview{max-width:100%;max-height:240px;border-radius:12px}
+  #vpreview[hidden],#preview[hidden]{display:none}
+  #status{margin:16px 0 0;min-height:1.5em;color:var(--mute);font-size:.9rem}
+  #status.err{color:var(--err)}
+  #result{display:none;margin-top:16px;text-align:center}
+  #result img{width:200px;height:200px;object-fit:contain;border-radius:12px;background:
+    repeating-conic-gradient(#1b2830 0 25%,#0f1a20 0 50%) 0 0/16px 16px}
+  #result .row{display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+  #size{color:var(--mute);font-size:.8rem;margin-top:6px}
+  details{margin-top:20px;color:var(--mute);font-size:.85rem}
+  summary{cursor:pointer}
+</style>
+</head>
+<body>
+<main>
+  <h1>GIF → WhatsApp sticker</h1>
+  <p class="sub">Paste a Twitter / X link that has a GIF or video.</p>
+
+  <form id="f">
+    <input id="url" type="url" required placeholder="https://x.com/user/status/123…" autocomplete="off">
+    <button id="go">Convert</button>
+  </form>
+  <div class="modes" role="radiogroup" aria-label="Output format">
+    <label><input type="radio" name="mode" value="sticker" checked><span>Sticker</span></label>
+    <label><input type="radio" name="mode" value="gif"><span>GIF</span></label>
+  </div>
+  <div id="status" role="status"></div>
+
+  <div id="result">
+    <img id="preview" alt="Sticker preview">
+    <video id="vpreview" autoplay loop muted playsinline hidden></video>
+    <div id="size"></div>
+    <div class="row">
+      <button id="share">Send to WhatsApp</button>
+      <button id="dl" class="ghost">Download .webp</button>
+    </div>
+  </div>
+
+  <details>
+    <summary>How does this work?</summary>
+      <p>WhatsApp has no link that sends a sticker or GIF directly, so the page converts the clip in your browser, then opens your phone's share sheet. <b>Sticker</b> = 512×512 animated WebP (under 500&nbsp;KB, up to 6&nbsp;s). <b>GIF</b> = silent looping MP4 (up to 6&nbsp;s), which WhatsApp plays as a GIF. Pick WhatsApp and a chat. On desktop, download the file and drag it into a WhatsApp chat or use a sticker-pack app.</p>
+  </details>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const statusEl = $('status');
+const MAX_BYTES = 500 * 1024;
+let ffmpeg = null, blob = null, objUrl = null, outMode = 'sticker';
+const fileInfo = () => outMode === 'gif'
+  ? { name: 'clip.mp4', type: 'video/mp4' }
+  : { name: 'sticker.webp', type: 'image/webp' };
+
+function say(msg, err = false) { statusEl.textContent = msg; statusEl.className = err ? 'err' : ''; }
+
+function tweetId(u) {
+  const m = u.match(/(?:twitter|x|fxtwitter|vxtwitter|fixupx)\.com\/[^/]+\/status(?:es)?\/(\d+)/i);
+  return m && m[1];
+}
+
+async function getVideoUrl(id) {
+  const r = await fetch(`https://api.fxtwitter.com/status/${id}`);
+  if (!r.ok) throw new Error('Could not look up that tweet.');
+  const t = (await r.json()).tweet;
+  const vids = t && t.media && t.media.videos;
+  if (!vids || !vids.length) throw new Error('No GIF or video found in that tweet.');
+  return vids[0].url;
+}
+
+async function loadFFmpeg() {
+  if (ffmpeg) return ffmpeg;
+  say('Loading converter (first time only, ~30 MB)…');
+  const { FFmpeg } = FFmpegWASM, { toBlobURL } = FFmpegUtil;
+  const base = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
+  const f = new FFmpeg();
+  await f.load({
+    classWorkerURL: await toBlobURL('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/814.ffmpeg.js', 'text/javascript'),
+    coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
+    wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
+  });
+  return (ffmpeg = f);
+}
+
+async function toGif(f) {
+  // WhatsApp treats a silent video of 6s or less as a GIF.
+  say('Converting to GIF-style video…');
+  await f.exec(['-t', '6', '-i', 'in.mp4', '-an',
+                '-vf', 'scale=\'min(480,iw)\':-2,format=yuv420p',
+                '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28',
+                '-movflags', '+faststart', 'out.mp4']);
+  const data = await f.readFile('out.mp4');
+  return new Blob([data.buffer], { type: 'video/mp4' });
+}
+
+async function convert(videoUrl, mode) {
+  const f = await loadFFmpeg();
+  say('Downloading video…');
+  // twimg's CDN returns 403 when a foreign Referer is sent.
+  const res = await fetch(videoUrl, { referrerPolicy: 'no-referrer' });
+  if (!res.ok) throw new Error('Could not download the video.');
+  await f.writeFile('in.mp4', new Uint8Array(await res.arrayBuffer()));
+  if (mode === 'gif') return toGif(f);
+
+  // Try progressively smaller settings until under WhatsApp's 500 KB limit.
+  const tries = [[15, 60], [12, 45], [10, 35], [8, 25], [8, 15]];
+  for (let i = 0; i < tries.length; i++) {
+    const [fps, q] = tries[i];
+    say(`Converting… (attempt ${i + 1}/${tries.length})`);
+    const vf = `fps=${fps},scale=512:512:force_original_aspect_ratio=decrease,` +
+               `pad=512:512:-1:-1:color=0x00000000,format=yuva420p`;
+    await f.exec(['-t', '6', '-i', 'in.mp4', '-vf', vf, '-c:v', 'libwebp',
+                  '-lossless', '0', '-q:v', String(q), '-compression_level', '6',
+                  '-loop', '0', '-an', '-fps_mode', 'passthrough', 'out.webp']);
+    const data = await f.readFile('out.webp');
+    if (data.length <= MAX_BYTES || i === tries.length - 1) {
+      if (data.length > MAX_BYTES) throw new Error('Could not shrink it under 500 KB — try a shorter clip.');
+      return new Blob([data.buffer], { type: 'image/webp' });
+    }
+  }
+}
+
+$('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('result').style.display = 'none';
+  const id = tweetId($('url').value.trim());
+  if (!id) return say('That doesn’t look like a Twitter/X status link.', true);
+  $('go').disabled = true;
+  try {
+    say('Finding the video…');
+    const vurl = await getVideoUrl(id);
+    const mode = document.querySelector('input[name=mode]:checked').value;
+    blob = await convert(vurl, mode);
+    outMode = mode;
+    if (objUrl) URL.revokeObjectURL(objUrl);
+    objUrl = URL.createObjectURL(blob);
+    const isGif = mode === 'gif';
+    $('preview').hidden = isGif;
+    $('vpreview').hidden = !isGif;
+    (isGif ? $('vpreview') : $('preview')).src = objUrl;
+    $('size').textContent = `${(blob.size / 1024).toFixed(0)} KB · ` +
+      (isGif ? 'silent looping MP4 (WhatsApp shows it as a GIF)' : '512×512 animated WebP');
+    $('dl').textContent = isGif ? 'Download .mp4' : 'Download .webp';
+    $('result').style.display = 'block';
+    say('Done!');
+  } catch (err) {
+    console.error(err);
+    say(err.message || 'Something went wrong.', true);
+  } finally {
+    $('go').disabled = false;
+  }
+});
+
+$('dl').onclick = () => {
+  const a = document.createElement('a');
+  a.href = objUrl; a.download = fileInfo().name; a.click();
+};
+
+$('share').onclick = async () => {
+  const { name, type } = fileInfo();
+  const file = new File([blob], name, { type });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); }
+    catch (e) { if (e.name !== 'AbortError') say('Share failed — use Download instead.', true); }
+  } else {
+    say('Sharing isn’t supported here — downloading instead. Add it in WhatsApp from your files.');
+    $('dl').click();
+  }
+};
+</script>
+</body>
+</html>
