@@ -164,18 +164,18 @@
     <div id="result">
       <div class="preview-wrap">
         <img id="preview" alt="Sticker preview">
-        <video id="vpreview" autoplay loop muted playsinline hidden></video>
+        
       </div>
       <div id="size"></div>
       <div class="row">
         <button id="share">Send to WhatsApp</button>
-        <button id="dl" class="ghost">Download .mp4</button>
+        <button id="dl" class="ghost">Download .gif</button>
       </div>
     </div>
 
     <details>
       <summary>How does this work?</summary>
-      <p>WhatsApp has no link that sends a sticker or GIF directly, so the page converts the clip in your browser. <b>Sticker</b> is a 512×512 animated WebP (under 500&nbsp;KB, up to 6&nbsp;s) that you add with WhatsApp's Attach → Sticker. <b>GIF</b> is a silent looping MP4 (up to 6&nbsp;s) that WhatsApp plays as a GIF; on phones the button opens the share sheet.</p>
+      <p>WhatsApp has no link that sends a sticker or GIF directly, so the page converts the clip in your browser. <b>Sticker</b> is a 512×512 animated WebP (under 500&nbsp;KB, up to 6&nbsp;s) that you add with WhatsApp's Attach → Sticker. <b>GIF</b> is a looping GIF file (up to 6&nbsp;s) that WhatsApp plays as a GIF; on phones the button opens the share sheet.</p>
     </details>
   </main>
 </div>
@@ -194,7 +194,7 @@ const syncNote = () => { $('stickerNote').hidden = document.querySelector('input
 document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', syncNote));
 syncNote();
 const fileInfo = () => outMode === 'gif'
-  ? { name: 'clip.mp4', type: 'video/mp4' }
+  ? { name: 'clip.gif', type: 'image/gif' }
   : { name: 'sticker.webp', type: 'image/webp' };
 
 function say(msg, err = false) { statusEl.textContent = msg; statusEl.className = err ? 'err' : ''; }
@@ -231,14 +231,19 @@ async function loadFFmpeg() {
 }
 
 async function toGif(f) {
-  // WhatsApp treats a silent video of 6s or less as a GIF.
-  say('Converting to GIF-style video…');
-  await f.exec(['-t', '6', '-i', 'in.mp4', '-an',
-                '-vf', 'scale=\'min(480,iw)\':-2,format=yuv420p',
-                '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28',
-                '-movflags', '+faststart', 'out.mp4']);
-  const data = await f.readFile('out.mp4');
-  return new Blob([data.buffer], { type: 'video/mp4' });
+  // A real .gif file: WhatsApp plays these as looping GIFs instead of videos.
+  const tries = [[15, 480], [12, 400], [10, 320]];
+  for (let i = 0; i < tries.length; i++) {
+    const [fps, w] = tries[i];
+    say(`Converting to GIF… (attempt ${i + 1}/${tries.length})`);
+    const vf = `fps=${fps},scale='min(${w},iw)':-2:flags=lanczos,split[a][b];` +
+               `[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=bayer:bayer_scale=4`;
+    await f.exec(['-t', '6', '-i', 'in.mp4', '-vf', vf, '-loop', '0', 'out.gif']);
+    const data = await f.readFile('out.gif');
+    if (data.length <= 8 * 1024 * 1024 || i === tries.length - 1) {
+      return new Blob([data.buffer], { type: 'image/gif' });
+    }
+  }
 }
 
 async function convert(videoUrl, mode) {
@@ -283,12 +288,11 @@ $('f').addEventListener('submit', async e => {
     if (objUrl) URL.revokeObjectURL(objUrl);
     objUrl = URL.createObjectURL(blob);
     const isGif = mode === 'gif';
-    $('preview').hidden = isGif;
-    $('vpreview').hidden = !isGif;
-    (isGif ? $('vpreview') : $('preview')).src = objUrl;
-    $('size').textContent = `${(blob.size / 1024).toFixed(0)} KB · ` +
-      (isGif ? 'silent looping MP4 (WhatsApp shows it as a GIF)' : '512×512 animated WebP');
-    $('dl').textContent = isGif ? 'Download .mp4' : 'Download .webp';
+    $('preview').src = objUrl;
+    const kb = blob.size / 1024;
+    $('size').textContent = `${kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb.toFixed(0) + ' KB'} · ` +
+      (isGif ? 'looping GIF' : '512×512 animated WebP');
+    $('dl').textContent = isGif ? 'Download .gif' : 'Download .webp';
     // WhatsApp only makes a real sticker via its own Sticker option; a plain share arrives as a file.
     $('share').textContent = isGif ? 'Send to WhatsApp' : 'Get sticker';
     $('result').style.display = 'block';
