@@ -36,9 +36,9 @@
     box-shadow:0 1px 0 #fff inset,0 18px 40px -22px rgba(80,55,20,.35)}
   label.field{display:block;margin:0 0 8px;font-weight:700;font-size:.9rem}
   form{display:flex;gap:10px}
-  input[type=url]{flex:1;min-width:0;min-height:48px;padding:0 16px;border-radius:14px;border:1.5px solid var(--line);
+  #url{flex:1;min-width:0;min-height:48px;padding:0 16px;border-radius:14px;border:1.5px solid var(--line);
     background:#fff;color:var(--ink);font:inherit}
-  input[type=url]::placeholder{color:#9A9082}
+  #url::placeholder{color:#9A9082}
   button{min-height:48px;padding:0 20px;border:0;border-radius:14px;background:var(--ink);color:var(--card);
     font:600 1rem var(--body);cursor:pointer;transition:background-color .2s,transform .15s}
   button:hover:not(:disabled){background:#463E37}
@@ -47,7 +47,7 @@
   button.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
   button.ghost:hover:not(:disabled){background:var(--tray)}
   :focus-visible{outline:3px solid var(--green);outline-offset:2px}
-  input[type=url]:focus{outline:3px solid var(--green);outline-offset:0;border-color:transparent}
+  #url:focus{outline:3px solid var(--green);outline-offset:0;border-color:transparent}
 
   /* sticker / gif toggle */
   .modes{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:14px;padding:4px;border-radius:16px;background:var(--tray)}
@@ -69,9 +69,10 @@
   .preview-wrap img,.preview-wrap video{max-width:100%;max-height:100%;object-fit:contain}
   #vpreview[hidden],#preview[hidden]{display:none}
   #size{color:var(--mute);font-size:.82rem;margin-top:10px}
-  #hint{margin:14px 0 0;padding:12px 14px;border-radius:14px;background:var(--green-soft);color:#24402F;font-size:.9rem;text-align:left}
-  #hint[hidden]{display:none}
-  #hint code{background:rgba(255,255,255,.7);padding:1px 6px;border-radius:6px}
+  #stickerNote{margin:12px 0 0;padding:12px 14px;border-radius:14px;background:var(--green-soft);color:#24402F;font-size:.9rem}
+  #stickerNote[hidden]{display:none}
+  .help{margin:8px 0 0;color:var(--mute);font-size:.82rem}
+  #stickerNote code{background:rgba(255,255,255,.7);padding:1px 6px;border-radius:6px}
   #result .row{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap}
   #result .row button{flex:1 1 150px}
 
@@ -147,13 +148,15 @@
   <main>
     <label class="field" for="url">Tweet link</label>
     <form id="f">
-      <input id="url" type="url" required placeholder="https://x.com/user/status/123…" autocomplete="off">
+      <input id="url" type="text" inputmode="url" required placeholder="Paste the tweet link here" autocomplete="off" aria-describedby="help">
       <button id="go">Convert</button>
     </form>
+    <p class="help" id="help">Works with the link from a tweet's <b>Copy link</b> (x.com or twitter.com), or paste the whole tweet text if it contains the link. Short <code>t.co</code> links aren't supported.</p>
     <div class="modes" role="radiogroup" aria-label="Output format">
-      <label><input type="radio" name="mode" value="sticker" checked><span>Sticker</span></label>
-      <label><input type="radio" name="mode" value="gif"><span>GIF</span></label>
+      <label><input type="radio" name="mode" value="gif" checked><span>GIF</span></label>
+      <label><input type="radio" name="mode" value="sticker"><span>Sticker</span></label>
     </div>
+    <p id="stickerNote" hidden><b>To send it as a real sticker:</b> convert, download the file, then in WhatsApp click <b>Attach (+) → Sticker</b> and pick <code>sticker.webp</code>. Sharing the file directly sends it as a document.</p>
     <div id="status" role="status" aria-live="polite"></div>
 
     <div id="result">
@@ -162,10 +165,9 @@
         <video id="vpreview" autoplay loop muted playsinline hidden></video>
       </div>
       <div id="size"></div>
-      <p id="hint" hidden></p>
       <div class="row">
         <button id="share">Send to WhatsApp</button>
-        <button id="dl" class="ghost">Download .webp</button>
+        <button id="dl" class="ghost">Download .mp4</button>
       </div>
     </div>
 
@@ -183,16 +185,24 @@
 const $ = id => document.getElementById(id);
 const statusEl = $('status');
 const MAX_BYTES = 500 * 1024;
-let ffmpeg = null, blob = null, objUrl = null, outMode = 'sticker';
+let ffmpeg = null, blob = null, objUrl = null, outMode = 'gif';
+
+// Sticker instructions only show while Sticker is selected.
+const syncNote = () => { $('stickerNote').hidden = document.querySelector('input[name=mode]:checked').value !== 'sticker'; };
+document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', syncNote));
+syncNote();
 const fileInfo = () => outMode === 'gif'
   ? { name: 'clip.mp4', type: 'video/mp4' }
   : { name: 'sticker.webp', type: 'image/webp' };
 
 function say(msg, err = false) { statusEl.textContent = msg; statusEl.className = err ? 'err' : ''; }
 
-function tweetId(u) {
-  const m = u.match(/(?:twitter|x|fxtwitter|vxtwitter|fixupx)\.com\/[^/]+\/status(?:es)?\/(\d+)/i);
-  return m && m[1];
+// Accepts a tweet link, a link buried in pasted text, or a direct video.twimg.com link.
+function parseInput(text) {
+  const direct = text.match(/https?:\/\/video\.twimg\.com\/[^\s"'<>]+\.mp4[^\s"'<>]*/i);
+  if (direct) return { direct: direct[0] };
+  const m = text.match(/(?:twitter|x|fxtwitter|vxtwitter|fixupx)\.com\/(?:[^/\s]+|i\/web)\/status(?:es)?\/(\d+)/i);
+  return m ? { id: m[1] } : null;
 }
 
 async function getVideoUrl(id) {
@@ -259,12 +269,12 @@ async function convert(videoUrl, mode) {
 $('f').addEventListener('submit', async e => {
   e.preventDefault();
   $('result').style.display = 'none';
-  const id = tweetId($('url').value.trim());
-  if (!id) return say('That doesn’t look like a Twitter/X status link.', true);
+  const src = parseInput($('url').value);
+  if (!src) return say('I couldn’t find a tweet link there. Use a link like x.com/name/status/123… (t.co short links don’t work).', true);
   $('go').disabled = true;
   try {
     say('Finding the video…');
-    const vurl = await getVideoUrl(id);
+    const vurl = src.direct || await getVideoUrl(src.id);
     const mode = document.querySelector('input[name=mode]:checked').value;
     blob = await convert(vurl, mode);
     outMode = mode;
@@ -279,11 +289,6 @@ $('f').addEventListener('submit', async e => {
     $('dl').textContent = isGif ? 'Download .mp4' : 'Download .webp';
     // WhatsApp only makes a real sticker via its own Sticker option; a plain share arrives as a file.
     $('share').textContent = isGif ? 'Send to WhatsApp' : 'Get sticker';
-    const hint = $('hint');
-    hint.hidden = isGif;
-    hint.innerHTML = '<b>To send it as a real sticker:</b> download it, then in WhatsApp click ' +
-      '<b>Attach (+) → Sticker</b> and pick <code>sticker.webp</code>. ' +
-      'Sharing the file directly sends it as a document.';
     $('result').style.display = 'block';
     say('Done!');
   } catch (err) {
