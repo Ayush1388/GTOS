@@ -32,6 +32,8 @@
   #result img{width:200px;height:200px;object-fit:contain;border-radius:12px;background:
     repeating-conic-gradient(#1b2830 0 25%,#0f1a20 0 50%) 0 0/16px 16px}
   #result .row{display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+  #hint{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:rgba(37,211,102,.1);color:var(--fg);font-size:.85rem;text-align:left}
+  #hint[hidden]{display:none}
   #size{color:var(--mute);font-size:.8rem;margin-top:6px}
   details{margin-top:20px;color:var(--mute);font-size:.85rem}
   summary{cursor:pointer}
@@ -56,8 +58,10 @@
     <img id="preview" alt="Sticker preview">
     <video id="vpreview" autoplay loop muted playsinline hidden></video>
     <div id="size"></div>
+    <p id="hint" hidden></p>
     <div class="row">
-      <button id="share">Send to WhatsApp</button>
+      <button id="share">Send to WhatsApp</button><!-- sticker mode: downloads + shows steps -->
+
       <button id="dl" class="ghost">Download .webp</button>
     </div>
   </div>
@@ -168,6 +172,13 @@ $('f').addEventListener('submit', async e => {
     $('size').textContent = `${(blob.size / 1024).toFixed(0)} KB · ` +
       (isGif ? 'silent looping MP4 (WhatsApp shows it as a GIF)' : '512×512 animated WebP');
     $('dl').textContent = isGif ? 'Download .mp4' : 'Download .webp';
+    // WhatsApp only makes a real sticker via its own Sticker option; a plain share arrives as a file.
+    $('share').textContent = isGif ? 'Send to WhatsApp' : 'Get sticker';
+    const hint = $('hint');
+    hint.hidden = isGif;
+    hint.innerHTML = '<b>To send it as a real sticker:</b> download it, then in WhatsApp click ' +
+      '<b>Attach (+) → Sticker</b> and pick <code>sticker.webp</code>. ' +
+      'Sharing the file directly sends it as a document.';
     $('result').style.display = 'block';
     say('Done!');
   } catch (err) {
@@ -185,6 +196,10 @@ $('dl').onclick = () => {
 
 $('share').onclick = async () => {
   const { name, type } = fileInfo();
+  if (outMode === 'sticker') { // a share would arrive as a document, so go via WhatsApp's Sticker option
+    say('Downloaded. In WhatsApp: Attach (+) → Sticker → pick sticker.webp');
+    return $('dl').click();
+  }
   const file = new File([blob], name, { type });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file] }); }
