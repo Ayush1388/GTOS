@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gifsbar</title>
-<meta name="description" content="Gifsbar: paste a Twitter/X GIF link and turn it into a GIF for WhatsApp.">
+<meta name="description" content="Gifsbar: paste a Twitter/X GIF link and send it to WhatsApp, Telegram or Instagram.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='44' fill='%23E9B949'/%3E%3Ccircle cx='36' cy='42' r='6' fill='%232B2622'/%3E%3Ccircle cx='64' cy='42' r='6' fill='%232B2622'/%3E%3Cpath d='M30 62q20 20 40 0' stroke='%232B2622' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -60,6 +60,17 @@
   .preview-wrap{display:inline-grid;place-items:center;width:220px;height:220px;border-radius:20px;overflow:hidden;
     background:repeating-conic-gradient(#EFE7D6 0 25%,#F7F1E3 0 50%) 0 0/18px 18px;border:1px solid var(--line)}
   .preview-wrap img,.preview-wrap video{max-width:100%;max-height:100%;object-fit:contain}
+  .preview-wrap [hidden]{display:none}
+
+  /* destination picker */
+  .dest-label{display:block;margin:16px 0 8px;font-weight:700;font-size:.9rem}
+  .modes{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border-radius:16px;background:var(--tray)}
+  .modes label{cursor:pointer;position:relative}
+  .modes input{position:absolute;opacity:0;pointer-events:none}
+  .modes span{display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:12px;font-weight:700;font-size:.92rem;
+    color:var(--mute);transition:background-color .2s,color .2s}
+  .modes input:checked+span{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(80,55,20,.18)}
+  .modes input:focus-visible+span{outline:3px solid var(--green);outline-offset:2px}
   #size{color:var(--mute);font-size:.82rem;margin-top:10px}
   #steps{margin:16px 0 0;padding:14px 14px 14px 34px;border-radius:14px;background:var(--green-soft);color:#24402F;font-size:.9rem;text-align:left}
   #steps li{margin:2px 0}
@@ -133,8 +144,8 @@
   <header>
     <div class="brand">Gifsbar</div>
     <span class="pill">Free · runs in your browser</span>
-    <h1>Turn any tweet GIF into a <mark>WhatsApp sticker</mark></h1>
-    <p>Paste a Twitter / X link. Get a GIF, then make it a sticker.</p>
+    <h1>Send any tweet GIF to <mark>WhatsApp, Telegram &amp; Instagram</mark></h1>
+    <p>Paste a Twitter / X link, pick where it's going, and get a file that works there.</p>
   </header>
 
   <main>
@@ -144,27 +155,30 @@
       <button id="go">Convert</button>
     </form>
     <p class="help" id="help">Works with the link from a tweet's <b>Copy link</b> (x.com or twitter.com), or paste the whole tweet text if it contains the link. Short <code>t.co</code> links aren't supported.</p>
+    <span class="dest-label" id="destLabel">Send it to</span>
+    <div class="modes" role="radiogroup" aria-labelledby="destLabel">
+      <label><input type="radio" name="dest" value="whatsapp" checked><span>WhatsApp</span></label>
+      <label><input type="radio" name="dest" value="telegram"><span>Telegram</span></label>
+      <label><input type="radio" name="dest" value="instagram"><span>Instagram</span></label>
+    </div>
     <div id="status" role="status" aria-live="polite"></div>
 
     <div id="result">
       <div class="preview-wrap">
         <img id="preview" alt="GIF preview">
+        <video id="vpreview" autoplay loop muted playsinline hidden></video>
       </div>
       <div id="size"></div>
       <div class="row">
         <button id="share">Send to WhatsApp</button>
         <button id="dl" class="ghost">Download .gif</button>
       </div>
-      <ol id="steps">
-        <li><b>Send to WhatsApp.</b> It goes as a GIF.</li>
-        <li><b>Download</b> the GIF.</li>
-        <li>In WhatsApp, click <b>New sticker</b> and pick the GIF from the gallery to make it a sticker.</li>
-      </ol>
+      <ol id="steps"></ol>
     </div>
 
     <details>
       <summary>How does this work?</summary>
-      <p>WhatsApp has no link that creates a sticker directly, so the page converts the clip in your browser into a looping GIF (up to 6&nbsp;s). Send it to WhatsApp, download it, then use WhatsApp's <b>New sticker</b> to turn the GIF into a sticker. On phones the send button opens the share sheet.</p>
+      <p>None of these apps has a link that sends a file for you, so the page converts the clip in your browser. <b>WhatsApp and Telegram</b> get a looping GIF (up to 6&nbsp;s). <b>Instagram</b> gets a short silent video (up to 15&nbsp;s), because its chats only animate GIFs from its own library. On phones the send button opens the share sheet; on desktop it downloads the file.</p>
     </details>
   </main>
 </div>
@@ -176,7 +190,6 @@
 const $ = id => document.getElementById(id);
 const statusEl = $('status');
 let ffmpeg = null, blob = null, objUrl = null;
-const FILE = { name: 'clip.gif', type: 'image/gif' };
 
 function say(msg, err = false) { statusEl.textContent = msg; statusEl.className = err ? 'err' : ''; }
 
@@ -227,31 +240,75 @@ async function toGif(f) {
   }
 }
 
-async function convert(videoUrl) {
+async function toMp4(f) {
+  // Instagram DMs only animate their own GIF library, so a custom clip goes as a short silent video.
+  say('Converting to video…');
+  await f.exec(['-t', '15', '-i', 'in.mp4', '-an',
+                '-vf', "scale='trunc(min(720,iw)/2)*2':-2,format=yuv420p",
+                '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26',
+                '-movflags', '+faststart', 'out.mp4']);
+  const data = await f.readFile('out.mp4');
+  return new Blob([data.buffer], { type: 'video/mp4' });
+}
+
+async function convert(videoUrl, fmt) {
   const f = await loadFFmpeg();
   say('Downloading video…');
   // twimg's CDN returns 403 when a foreign Referer is sent.
   const res = await fetch(videoUrl, { referrerPolicy: 'no-referrer' });
   if (!res.ok) throw new Error('Could not download the video.');
   await f.writeFile('in.mp4', new Uint8Array(await res.arrayBuffer()));
-  return toGif(f);
+  return fmt === 'mp4' ? toMp4(f) : toGif(f);
 }
 
-$('f').addEventListener('submit', async e => {
-  e.preventDefault();
+// Where the clip is going. WhatsApp/Telegram get a GIF; Instagram gets a video (see steps).
+const DEST = {
+  whatsapp: { label: 'WhatsApp', fmt: 'gif', steps: [
+    '<b>Send to WhatsApp.</b> It goes as a GIF.',
+    '<b>Download</b> the GIF.',
+    'In WhatsApp, click <b>New sticker</b> and pick the GIF from the gallery to make it a sticker.'] },
+  telegram: { label: 'Telegram', fmt: 'gif', steps: [
+    '<b>Send to Telegram</b> and pick a chat. On desktop, <b>download</b> it and drag it into the chat.',
+    'Telegram plays it as an animated GIF.',
+    'Long-press the GIF and choose <b>Save GIF</b> to reuse it anytime.'] },
+  instagram: { label: 'Instagram', fmt: 'mp4', steps: [
+    'Instagram chats can’t send your own GIFs. They only animate GIFs from Instagram’s built-in library, and a downloaded .gif goes as a photo.',
+    '<b>Send to Instagram</b> (or <b>Download</b> it) and send it as a <b>video</b> instead. It's a short silent clip.',
+    'Want it in Instagram’s GIF picker? It has to be uploaded to a GIPHY channel first, which needs GIPHY approval.'] },
+};
+const FILES = {
+  gif: { name: 'clip.gif', type: 'image/gif' },
+  mp4: { name: 'clip.mp4', type: 'video/mp4' },
+};
+let fmt = 'gif', lastSrc = null, lastVurl = null;
+const curDest = () => DEST[document.querySelector('input[name=dest]:checked').value];
+
+function renderDest() {
+  const d = curDest();
+  $('steps').innerHTML = d.steps.map(s => `<li>${s}</li>`).join('');
+  $('share').textContent = `Send to ${d.label}`;
+  $('dl').textContent = `Download .${d.fmt}`;
+}
+
+async function run() {
+  const d = curDest();
   $('result').style.display = 'none';
-  const src = parseInput($('url').value);
-  if (!src) return say('I couldn’t find a tweet link there. Use a link like x.com/name/status/123… (t.co short links don’t work).', true);
   $('go').disabled = true;
   try {
     say('Finding the video…');
-    const vurl = src.direct || await getVideoUrl(src.id);
-    blob = await convert(vurl);
+    if (!lastVurl) lastVurl = lastSrc.direct || await getVideoUrl(lastSrc.id);
+    blob = await convert(lastVurl, d.fmt);
+    fmt = d.fmt;
     if (objUrl) URL.revokeObjectURL(objUrl);
     objUrl = URL.createObjectURL(blob);
-    $('preview').src = objUrl;
+    const isVideo = fmt === 'mp4';
+    $('preview').hidden = isVideo;
+    $('vpreview').hidden = !isVideo;
+    (isVideo ? $('vpreview') : $('preview')).src = objUrl;
     const kb = blob.size / 1024;
-    $('size').textContent = `${kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb.toFixed(0) + ' KB'} · looping GIF`;
+    $('size').textContent = `${kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb.toFixed(0) + ' KB'} · ` +
+      (isVideo ? 'short video (MP4)' : 'looping GIF');
+    renderDest();
     $('result').style.display = 'block';
     say('Done!');
   } catch (err) {
@@ -260,20 +317,35 @@ $('f').addEventListener('submit', async e => {
   } finally {
     $('go').disabled = false;
   }
+}
+
+$('f').addEventListener('submit', e => {
+  e.preventDefault();
+  const src = parseInput($('url').value);
+  if (!src) return say('I couldn’t find a tweet link there. Use a link like x.com/name/status/123… (t.co short links don’t work).', true);
+  lastSrc = src; lastVurl = null;
+  run();
 });
+
+// Switching destination: update the steps now, and re-convert if the file type has to change.
+document.querySelectorAll('input[name=dest]').forEach(r => r.addEventListener('change', () => {
+  renderDest();
+  if (lastSrc && blob && curDest().fmt !== fmt && !$('go').disabled) run();
+}));
+renderDest();
 
 $('dl').onclick = () => {
   const a = document.createElement('a');
-  a.href = objUrl; a.download = FILE.name; a.click();
+  a.href = objUrl; a.download = FILES[fmt].name; a.click();
 };
 
 $('share').onclick = async () => {
-  const file = new File([blob], FILE.name, { type: FILE.type });
+  const file = new File([blob], FILES[fmt].name, { type: FILES[fmt].type });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file] }); }
     catch (e) { if (e.name !== 'AbortError') say('Share failed — use Download instead.', true); }
   } else {
-    say('Sharing isn’t supported here — downloading instead. Add it in WhatsApp from your files.');
+    say('Sharing isn’t supported here — downloading instead. Add it from your files.');
     $('dl').click();
   }
 };
