@@ -178,7 +178,7 @@
 
     <details>
       <summary>How does this work?</summary>
-      <p>None of these apps has a link that sends a file for you, so the page converts the clip in your browser. <b>WhatsApp and Telegram</b> get a looping GIF (up to 6&nbsp;s). <b>Instagram</b> gets a silent video (short clips are looped to about 10&nbsp;s, up to 15&nbsp;s), because its chats only animate GIFs from its own library. On phones the send button opens the share sheet; on desktop it downloads the file.</p>
+      <p>None of these apps has a link that sends a file for you, so the page converts the clip in your browser. <b>WhatsApp and Telegram</b> get a looping GIF (up to 6&nbsp;s). <b>Instagram</b> gets a silent video (short clips are looped to at least 3&nbsp;s, up to 15&nbsp;s), because its chats only animate GIFs from its own library. On phones the send button opens the share sheet; on desktop it downloads the file.</p>
     </details>
   </main>
 </div>
@@ -253,10 +253,10 @@ function clipDuration(bytes) {
   });
 }
 
-const VIDEO_MIN = 10, VIDEO_MAX = 15; // seconds
+const VIDEO_MIN = 3, VIDEO_MAX = 15; // seconds
 async function toMp4(f, dur) {
   // Instagram DMs only animate their own GIF library, so a custom clip goes as a silent video.
-  // Tweet GIFs are ~1 s long, so loop short clips up to about VIDEO_MIN seconds.
+  // Tweet GIFs are ~1 s long, so loop short clips up to VIDEO_MIN seconds.
   say('Converting to video…');
   let loops = 0, len = VIDEO_MAX;
   if (dur > 0 && dur < VIDEO_MIN) {
@@ -297,7 +297,7 @@ const DEST = {
     'Long-press the GIF and choose <b>Save GIF</b> to reuse it anytime.'] },
   instagram: { label: 'Instagram', fmt: 'mp4', steps: [
     'Instagram chats can’t send your own GIFs. They only animate GIFs from Instagram’s built-in library, and a downloaded .gif goes as a photo.',
-    '<b>Send to Instagram</b> (or <b>Download</b> it) and send it as a <b>video</b> instead. Short clips are looped to about 10 seconds, with no sound.',
+    '<b>Send to Instagram</b> (or <b>Download</b> it) and send it as a <b>video</b> instead. Short clips are looped to at least 3 seconds, with no sound.',
     'Want it in Instagram’s GIF picker? It has to be uploaded to a GIPHY channel first, which needs GIPHY approval.'] },
 };
 const FILES = {
